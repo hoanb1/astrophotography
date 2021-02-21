@@ -7,7 +7,7 @@
 //Global declarations
 long fullWheel = 60000;
 //word posOffset[] = { 0, 750, 6050, 11350, 16650, 21950 };
-word posOffset[] = { 0, 350, 5650, 11000, 16200, 21500 };
+word posOffset[] = { 0, 250, 5550, 10850, 16150,  21450};
 bool Error = false;                      // Error flag
 
 byte currPos = 1;                        // Start up with 1
@@ -80,7 +80,7 @@ void setup() {
 
   //  Serial.setTimeout(1000);
   // Set stepper stuff
-  currPos = newPos =  EEPROM.read(1);
+  currPos = newPos =  EEPROM.read(0);
   debugMsg("Load Current Pos "+ String(currPos));  
   targetPosition = posOffset[currPos];
   stepper.setCurrentPosition(posOffset[currPos]);
@@ -89,10 +89,19 @@ void setup() {
   stepper.setSpeed(currentSpeed);       //current step rate
   stepper.setAcceleration(setAccel);     //"1000 = 100%" accellerationt to set step rate --check this in accelStepper
 
-  // read offsets from eaprom
-  //  for ( int i = 1; i <= filterNumber ; i++ ) {
-  //    posOffset[i] = word( EEPROM.read(i * 2 + 50), EEPROM.read(i * 2 + 51));
-  //  }
+   debugMsg("Read Offset from EEROM");
+   int i=0;
+   int eeAddress = 0;
+   long Value = 0;
+   for ( i = 1; i <= filterNumber ; i++ ) {
+    Value = posOffset[i];
+      eeAddress = (i-1)*sizeof(Value)+1;  
+      EEPROM.get( eeAddress, Value );
+      if(Value != 0 ){
+         posOffset[i] = Value;
+         debugMsg("Offset "+String(i) +" Value "+ String(Value)) ;       
+      }
+    }
 
   //intial calibration.
   //
@@ -451,6 +460,7 @@ void loop() {
 
 int digitalReadRand(int sensor) {
   int HallVl = digitalRead(SENSOR);
+ // debugMsg("Hall value: "+String(HallVl));
   return HallVl;
 }
 
@@ -475,8 +485,7 @@ void Non_blockRun() {
     return;
   }
   int HallValue = digitalReadRand(SENSOR);
-  if (findHome) {
-     
+  if (findHome) {     
 
     if (!motorIsrunning) {
       stepper.moveTo(fullWheel);
@@ -505,7 +514,7 @@ void Non_blockRun() {
           motorIsrunning = false;// Tell caller this is the new requested position
           debugMsg("Motor went to  "+String(currentPosition)); 
           motor_Off();          
-          EEPROM.write(1, currPos);          
+          EEPROM.write(0, currPos);          
           debugMsg("Save Current Pos "+String(currPos));        
           return;
       }
@@ -524,16 +533,23 @@ void Non_blockRun() {
     stepper.run();
     if (findHome) {
       HallValue = digitalReadRand(SENSOR);
-       if (HallValue == HIGH) {
-      motorIsrunning = false;
-      stepper.stop();
-      stepper.setCurrentPosition(0);
-      currPos = 0;
-      findHome = false;
-      EEPROM.write(1, currPos);
-      debugMsg("Finded home");
-      motor_Off();
-      break;
+       if (HallValue == HIGH 
+       && digitalReadRand(SENSOR) == HIGH 
+       && digitalReadRand(SENSOR) == HIGH
+       && digitalReadRand(SENSOR) == HIGH
+       && digitalReadRand(SENSOR) == HIGH
+       ) {
+        motorIsrunning = false;        
+        
+        int homePos = stepper.currentPosition();
+        stepper.stop();
+        stepper.setCurrentPosition(0);
+        currPos = 0;
+        findHome = false;
+        EEPROM.write(0, currPos);
+        debugMsg("Finded home at "+String(homePos));
+        motor_Off();
+        break;
     }
     }
   }
@@ -577,35 +593,36 @@ void motor_Off() {                                            //power down the s
 
 // Show some values and reset error flag.
 void epromSave() {
-
-  int i = 0;
-  word Value;
-
-  //EEPROM.write(address, value);
-  //  for ( i = 1; i <= filterNumber ; i++ ) {
-  //    EEPROM.write((i * 2) + 50, highByte(posOffset[i]));
-  //    EEPROM.write((i * 2) + 51, lowByte(posOffset[i]));
-  //  }
-  //  Serial.println("Current values written to EEPROM!!");
-  //  Serial.println("\n");
-  //  Serial.println("-------------------------------");
-  //  Serial.print("Current Offset : ");
-  //  Serial.println( posOffset[currPos] );
-  //  Serial.println();
-  //  Serial.println("offset values in eaprom");
-  //  for ( i = 1; i <= filterNumber ; i++ ) {
-  //    Value = word( EEPROM.read(i * 2 + 50), EEPROM.read(i * 2 + 51));
-  //    Serial.print("Offset: ");
-  //    Serial.print( i );
-  //    Serial.print(" = ");
-  //    Serial.println( Value );
-  //  }
-  //
-  //  if ( !Error ) {
-  //    Serial.println("Normal operation resumed");
-  //  }
-  //
-  //  Error = false;
+  debugMsg("Wite data to EEROM");
+  int i = 1; 
+  int eeAddress = 0; 
+  long Value =0;
+  long f = 0;
+    for ( i = 1; i <= filterNumber ; i++ ) {
+      Value = posOffset[i];
+      eeAddress = (i-1)*sizeof(Value)+1 ;  
+      
+      EEPROM.put(eeAddress,Value);
+      debugMsg("Adress "+String(eeAddress)+" Value: "+String(Value));
+      
+    }
+    Serial.println("Current values written to EEPROM!!");
+   
+    for ( i = 1; i <= filterNumber ; i++ ) {
+      Value = posOffset[i];
+      eeAddress = (i-1)*sizeof(Value)+1 ; 
+      EEPROM.get( eeAddress,Value);
+      Serial.print("Offset: ");
+      Serial.print( eeAddress );
+      Serial.print(" = ");
+      Serial.println( Value );
+    }
+  
+    if ( !Error ) {
+      Serial.println("Normal operation resumed");
+    }
+  
+    Error = false;
   return;
 
 
