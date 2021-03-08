@@ -7,7 +7,7 @@
 //Global declarations
 long fullWheel = 60000;
 //word posOffset[] = { 0, 750, 6050, 11350, 16650, 21950 };
-word posOffset[] = { 0, 250, 5550, 10850, 16150,  21450};
+word posOffset[] = { 0, 300, 5600, 10900, 16200,  21500};
 bool Error = false;                      // Error flag
 
 byte currPos = 1;                        // Start up with 1
@@ -58,6 +58,8 @@ const int SENSOR = 10;       // PIN A3 = Hall effect switch - onboard comparator
 
 // Initialize with pin sequence IN1-IN3-IN2-IN4 for using the AccelStepper with 28BYJ-48
 AccelStepper stepper(STEPS, motorPin1, motorPin3, motorPin2, motorPin4);
+
+void(* resetFunc) (void) = 0;//declare reset function at address 0
 
 void setup() {
   Serial.begin(9600);
@@ -301,7 +303,9 @@ void loop() {
 
   // Hard reboot --this should be a cpu reset command
   if ( inLine == "R0" ) {
-    //Good luck.
+    Serial.println("Reset in 3 seconds");
+    delay(3000);         
+    resetFunc();  //call reset
   }
 
   // Initialize, restarts and moves to filter position 1.
@@ -402,6 +406,9 @@ void loop() {
 
   if (command == 'D' ) {
     debug = !debug;
+    if(debug){
+      debugMsg("Debug on");
+    }
     
   }
   if (command == 'P' ) {
@@ -423,27 +430,25 @@ void loop() {
   if ( paramNumber == -48 ) {
     return;
   }
+  int nextPos =0;
   if ( command == 'G') {
-
-    newPos = paramNumber; // newPos=int -48 if no input..
-  }
-  if ( command == 'G' && ( newPos >= 1 || newPos <= 5 ) ) {
-
-    // if ( newPos == 1 && ( newPos != currPos) ) {
-    //  Locate_Home();
-    // }
-
-    if ( newPos > filterNumber ) {
-      newPos = currPos;
-    }
-
-    if ( newPos != currPos ) {
-      Locate_Slot_x();
+    cmdOK = true;
+    nextPos = paramNumber; // newPos=int -48 if no input..
+    if (  nextPos >= 1 || nextPos <= filterNumber  ) {
+      if(newPos==currPos){ // Motor is not running.
+        newPos = nextPos;
+        if ( newPos != currPos ) {
+          Locate_Slot_x();
+        }
+      }else{
+        debugMsg("Motor is running. Skeep command");
+      }
     }
     Serial.print("P");
     Serial.println(getIndexPos());
+    Serial.println(stepper.currentPosition());
     // delay(100);
-  }
+    }
 
 
   // If command not recognized, flush buffer and wait for next command..
@@ -469,13 +474,17 @@ int getIndexPos() {
     return 1;
   }
   return currPos;
-//  int currentPosition = stepper.currentPosition();
-//  for (int i = filterNumber; i > 0; i--) {
-//    if ( posOffset[i] <= currentPosition) {
-//      return i;
-//    }
-//  }
-//  return 1;
+  //if(debug){
+   // int currentPosition = stepper.currentPosition();
+    //  for (int i = filterNumber; i > 0; i--) {
+     //   if ( posOffset[i] <= currentPosition) {
+      //    return i;
+       // }
+   // }
+   // return 1;
+ //}else{
+  // return currPos;
+ //}
 }
 void Non_blockRun() {
   int currentPosition = stepper.currentPosition();
@@ -624,6 +633,5 @@ void epromSave() {
   
     Error = false;
   return;
-
 
 }
